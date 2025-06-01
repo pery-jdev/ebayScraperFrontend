@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from './LanguageProvider';
 import { useSearchProducts } from '@/hooks/api/useProductApi';
+import { useTaskStatus } from '@/hooks/api/useTaskApi';
 import { ProductData } from '@/types/product';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,13 +12,17 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Search, BarChart3, Languages, Package } from 'lucide-react';
+import { Search, BarChart3, Languages, Package, ListTodo } from 'lucide-react';
 import { categories, TranslationKey } from '@/translations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
+import { Progress } from '@/components/ui/progress';
+import { TaskList } from './TaskList';
 
 interface SearchFormProps {
   onSearch: (data: ProductData[]) => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
 }
 
 interface SearchResponse {
@@ -25,25 +30,26 @@ interface SearchResponse {
   status: "pending";
 }
 
-export const SearchForm = ({ onSearch }: SearchFormProps) => {
+export const SearchForm = ({ onSearch, activeTab, setActiveTab }: SearchFormProps) => {
   const { mutate: search, isPending: isLoading } = useSearchProducts();
   const { t } = useLanguage();
   const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
-  const [activeTab, setActiveTab] = useState('search');
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  
+  const { data: taskStatus } = useTaskStatus(currentTaskId || '');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
       search({ query, category }, {
         onSuccess: (response: SearchResponse) => {
+          setCurrentTaskId(response.task_id);
           toast({
             title: "Search Started",
             description: `Task ID: ${response.task_id}`,
           });
-          // TODO: Implement polling for task status and results
-          // For now, we'll just show a success message
         },
         onError: (error) => {
           console.error('Search failed:', error);
@@ -57,11 +63,34 @@ export const SearchForm = ({ onSearch }: SearchFormProps) => {
     }
   };
 
+  // Handle task completion
+  React.useEffect(() => {
+    if (taskStatus?.status === 'completed' && taskStatus.result) {
+      onSearch(taskStatus.result);
+      setCurrentTaskId(null);
+      toast({
+        title: "Search Complete",
+        description: `Found ${taskStatus.result.length} results`,
+      });
+    } else if (taskStatus?.status === 'failed') {
+      toast({
+        title: "Search Failed",
+        description: taskStatus.error || "An error occurred during search",
+        variant: "destructive",
+      });
+      setCurrentTaskId(null);
+    }
+  }, [taskStatus, onSearch, toast]);
+
   return (
     <div className="w-full bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 md:p-6 mb-6">
-      <Tabs defaultValue="search" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 mb-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-4 mb-4">
           <TabsTrigger value="search">{t('search')}</TabsTrigger>
+          <TabsTrigger value="tasks">
+            <ListTodo className="w-4 h-4 mr-2" />
+            Tasks
+          </TabsTrigger>
           <TabsTrigger value="translate">{t('translateProducts')}</TabsTrigger>
           <TabsTrigger value="bundles">{t('createBundles')}</TabsTrigger>
         </TabsList>
@@ -95,13 +124,23 @@ export const SearchForm = ({ onSearch }: SearchFormProps) => {
                 </Select>
               </div>
             </div>
+
+            {taskStatus?.progress && (
+              <div className="space-y-2">
+                <Progress value={(taskStatus.progress.processed / taskStatus.progress.total) * 100} />
+                <div className="text-sm text-gray-500">
+                  {taskStatus.progress.processed} / {taskStatus.progress.total} items processed
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end">
               <Button 
                 type="submit" 
-                disabled={isLoading || !query.trim()} 
+                disabled={isLoading || !query.trim() || !!currentTaskId} 
                 className="bg-ebay-blue hover:bg-blue-700 text-white"
               >
-                {isLoading ? (
+                {isLoading || currentTaskId ? (
                   <>
                     <BarChart3 className="mr-2 h-4 w-4 animate-pulse" />
                     <span>{t('scraping')}</span>
@@ -115,6 +154,10 @@ export const SearchForm = ({ onSearch }: SearchFormProps) => {
               </Button>
             </div>
           </form>
+        </TabsContent>
+
+        <TabsContent value="tasks">
+          <TaskList isActive={activeTab === 'tasks'} />
         </TabsContent>
         
         <TabsContent value="translate">
