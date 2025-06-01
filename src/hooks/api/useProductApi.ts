@@ -6,14 +6,19 @@ import {
   convertCurrency
 } from '@/api/productApi';
 import {
-  SearchParams,
   BundleParams,
   CurrencyConversionParams
 } from '@/types/product';
 
+// New interface for search
+interface SearchRequest {
+  query: string;      // Required: Search query string
+  category?: string;  // Optional: Category filter
+}
+
 export const useSearchProducts = () => {
   return useMutation({
-    mutationFn: (params: SearchParams) => searchProducts(params)
+    mutationFn: (params: SearchRequest) => searchProducts(params)
   });
 };
 

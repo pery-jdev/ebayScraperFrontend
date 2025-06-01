@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useLanguage } from './LanguageProvider';
 import { useSearchProducts } from '@/hooks/api/useProductApi';
@@ -13,16 +12,23 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Search, BarChart3, Languages, Package } from 'lucide-react';
-import { categories } from '@/translations';
+import { categories, TranslationKey } from '@/translations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/use-toast";
 
 interface SearchFormProps {
   onSearch: (data: ProductData[]) => void;
 }
 
+interface SearchResponse {
+  task_id: string;
+  status: "pending";
+}
+
 export const SearchForm = ({ onSearch }: SearchFormProps) => {
   const { mutate: search, isPending: isLoading } = useSearchProducts();
   const { t } = useLanguage();
+  const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [activeTab, setActiveTab] = useState('search');
@@ -31,11 +37,21 @@ export const SearchForm = ({ onSearch }: SearchFormProps) => {
     e.preventDefault();
     if (query.trim()) {
       search({ query, category }, {
-        onSuccess: (data) => {
-          onSearch(data);
+        onSuccess: (response: SearchResponse) => {
+          toast({
+            title: "Search Started",
+            description: `Task ID: ${response.task_id}`,
+          });
+          // TODO: Implement polling for task status and results
+          // For now, we'll just show a success message
         },
         onError: (error) => {
           console.error('Search failed:', error);
+          toast({
+            title: "Error",
+            description: "Failed to start search. Please try again.",
+            variant: "destructive",
+          });
         }
       });
     }
@@ -72,7 +88,7 @@ export const SearchForm = ({ onSearch }: SearchFormProps) => {
                   <SelectContent>
                     {categories.map((cat) => (
                       <SelectItem key={cat.value} value={cat.value}>
-                        {t(cat.labelKey as any)}
+                        {t(cat.labelKey as TranslationKey)}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1,11 +1,21 @@
 import axios from 'axios';
 import {
   ProductData,
-  SearchParams,
   BundleParams,
   CurrencyConversionParams,
   CurrencyConversionResult
 } from '@/types/product';
+
+// New interfaces for search
+interface SearchRequest {
+  query: string;      // Required: Search query string
+  category?: string;  // Optional: Category filter
+}
+
+interface SearchResponse {
+  task_id: string;    // Task ID to track the search progress
+  status: "pending";  // Initial status
+}
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -15,8 +25,19 @@ const apiClient = axios.create({
 });
 
 // Search products
-export const searchProducts = async (params: SearchParams): Promise<ProductData[]> => {
-  const response = await apiClient.post('/search', params);
+export const searchProducts = async (params: SearchRequest): Promise<SearchResponse> => {
+  const formData = new URLSearchParams();
+  formData.append('query', params.query);
+  if (params.category && params.category !== 'all') {
+    formData.append('category', params.category);
+  } else {
+    formData.append('category', '');
+  }
+  const response = await apiClient.post('/search', formData, {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  });
   return response.data;
 };
 
